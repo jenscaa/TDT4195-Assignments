@@ -52,23 +52,61 @@ fn offset<T>(n: u32) -> *const c_void {
 // ptr::null()
 
 
-// == // Generate your VAO here
-unsafe fn create_vao(vertices: &Vec<f32>, indices: &Vec<u32>) -> u32 {
-    // Implement me!
+// ##############################################################################
+// TASK 1a) 
 
-    // Also, feel free to delete comments :)
+// Creates a VAO and returns its id
+unsafe fn create_vao(vertices: &Vec<f32>, indices: &Vec<u32>, colors: &Vec<f32>) -> u32 {
+    // Creating and setting up a Vertex Array Object
+    let mut vao_id: u32 = 0;
+    gl::GenVertexArrays(1, &mut vao_id);
+    gl::BindVertexArray(vao_id);
 
-    // This should:
-    // * Generate a VAO and bind it
-    // * Generate a VBO and bind it
-    // * Fill it with data
-    // * Configure a VAP for the data and enable it
-    // * Generate a IBO and bind it
-    // * Fill it with data
-    // * Return the ID of the VAO
+    // Creating a Vertex Buffer Object
+    let mut vbo: u32 = 0;
+    gl::GenBuffers(1, &mut vbo);
+    gl::BindBuffer(gl::ARRAY_BUFFER, vbo);
+    gl::BufferData(
+        gl::ARRAY_BUFFER,
+        byte_size_of_array(vertices),
+        pointer_to_array(vertices),
+        gl::STATIC_DRAW,
+    );
 
-    0
+    // Enabling the Vertex Attributes
+    let stride = 3 * size_of::<f32>();
+    gl::EnableVertexAttribArray(0);
+    gl::VertexAttribPointer(0, 3, gl::FLOAT, gl::FALSE, stride as i32, offset::<f32>(0));
+
+    // Creating an Index Buffer Object
+    let mut ibo: u32 = 0;
+    gl::GenBuffers(1, &mut ibo);
+    gl::BindBuffer(gl::ELEMENT_ARRAY_BUFFER, ibo);
+    gl::BufferData(
+        gl::ELEMENT_ARRAY_BUFFER,
+        byte_size_of_array(indices),
+        pointer_to_array(indices),
+        gl::STATIC_DRAW,
+    );
+
+    // Create a color buffer object
+    let mut cbo: u32 = 0;
+    gl::GenBuffers(1, &mut cbo);
+    gl::BindBuffer(gl::ARRAY_BUFFER, cbo);
+    gl::BufferData(
+        gl::ARRAY_BUFFER,
+        byte_size_of_array(colors),
+        pointer_to_array(colors),
+        gl::STATIC_DRAW,
+    );
+
+    // Enabling color attributes
+    gl::EnableVertexAttribArray(1);
+    gl::VertexAttribPointer(1, 4, gl::FLOAT, gl::FALSE, 0, ptr::null());
+
+    return vao_id;
 }
+// ##############################################################################
 
 
 fn main() {
@@ -130,27 +168,126 @@ fn main() {
             println!("GLSL\t: {}", util::get_gl_string(gl::SHADING_LANGUAGE_VERSION));
         }
 
-        // == // Set up your VAO around here
-
-        let my_vao = unsafe { 1337 };
-
-
-        // == // Set up your shaders here
-
-        // Basic usage of shader helper:
-        // The example code below creates a 'shader' object.
-        // It which contains the field `.program_id` and the method `.activate()`.
-        // The `.` in the path is relative to `Cargo.toml`.
-        // This snippet is not enough to do the exercise, and will need to be modified (outside
-        // of just using the correct path), but it only needs to be called once
-
-        /*
         let simple_shader = unsafe {
             shader::ShaderBuilder::new()
-                .attach_file("./path/to/simple/shader.file")
+                .attach_file("./shaders/simple.vert")
+                .attach_file("./shaders/simple.frag")
                 .link()
         };
-        */
+
+        // ###############################################
+
+        // Triangles for task 1 b)
+
+        // let vertices: Vec<f32> = vec![
+
+        //     // Triangle 1
+        //     -0.3,  0.4, 0.0,
+        //     0.3,  0.4, 0.0,
+        //     0.0,  0.8, 0.0,
+
+        //     // Triangle 2
+        //     -0.85,  0.55, 0.0,
+        //     -0.65,  0.55, 0.0,
+        //     -0.75,  0.80, 0.0,
+
+        //     // Triangle 3
+        //     0.69,  0.59, 0.0,
+        //     0.89,  0.59, 0.0,
+        //     0.75,  0.80, 0.0,
+
+        //     // Triangle 4
+        //     -0.95, -0.05, 0.0,
+        //     -0.55, -0.05, 0.0,
+        //     -0.75, 0.35, 0.0,
+
+        //     // Trinagle 5
+        //     -0.21, -0.05, 0.0,
+        //     0.21, -0.05, 0.0,
+        //     0.0, 0.2, 0.0,
+        // ];
+
+        // let indices: Vec<u32> = vec![0,1,2,3,4,5,6,7,8,9,10,11,12,13,14];
+
+        // let colors: Vec<f32> = vec![
+
+        //     // Triangle 1 (red, green, blue)
+        //     1.0, 0.0, 0.0, 1.0,
+        //     0.0, 1.0, 0.0, 1.0,
+        //     0.0, 0.0, 1.0, 1.0,
+
+        //     // Triangle 2 (yellow, magenta, cyan)
+        //     1.0, 1.0, 0.0, 1.0,
+        //     1.0, 0.0, 1.0, 1.0,
+        //     0.0, 1.0, 1.0, 1.0,
+
+        //     // Triangle 3 (orange, white, black)
+        //     1.0, 0.5, 0.0, 1.0,
+        //     1.0, 1.0, 1.0, 1.0,
+        //     0.0, 0.0, 0.0, 1.0,
+
+        //     // Triangle 4 (gray shades)
+        //     0.2, 0.2, 0.2, 1.0,
+        //     0.5, 0.5, 0.5, 1.0,
+        //     0.8, 0.8, 0.8, 1.0,
+
+        //     // Triangle 5 (transparent red to solid red)
+        //     1.0, 0.0, 0.0, 0.2,
+        //     1.0, 0.0, 0.0, 0.6,
+        //     1.0, 0.0, 0.0, 1.0,
+        // ];
+
+        // let vao = unsafe { create_vao(&vertices, &indices, &colors) };
+        // let index_count = indices.len() as i32;
+
+        // ###############################################
+
+        // Triangles for task 2 a)
+
+        let vertices: Vec<f32> = vec![
+            // Triangle 1 (furthest) – largest triangle
+            -0.6, -0.4, 0.1,
+            0.6, -0.4, 0.1,
+            0.0,  0.6, 0.1,
+
+            // Triangle 2 (middle) – medium triangle
+            -0.45, -0.45, 0.2,
+            0.45, -0.45, 0.2,
+            0.0,   0.45, 0.2,
+
+            // Triangle 3 (closest) – smallest triangle
+            -0.3, -0.5, 0.3,
+            0.3, -0.5, 0.3,
+            0.0,  0.3, 0.3,
+        ];
+
+
+        let indices: Vec<u32> = vec![
+            0, 1, 2,  // Triangle 1
+            3, 4, 5,  // Triangle 2
+            6, 7, 8,  // Triangle 3
+        ];
+
+            let colors: Vec<f32> = vec![
+            // Triangle 1 (furthest) – Light Yellow
+            0.98, 0.95, 0.70, 0.6,
+            0.98, 0.95, 0.70, 0.6,
+            0.98, 0.95, 0.70, 0.6,
+
+            // Triangle 2 (middle) – Light Red
+            0.96, 0.72, 0.72, 0.6,
+            0.96, 0.72, 0.72, 0.6,
+            0.96, 0.72, 0.72, 0.6,
+
+            // Triangle 3 (closest) – Light Blue
+            0.68, 0.85, 0.90, 0.6,
+            0.68, 0.85, 0.90, 0.6,
+            0.68, 0.85, 0.90, 0.6,
+        ];
+
+        let vao = unsafe { create_vao(&vertices, &indices, &colors) };
+        let index_count = indices.len() as i32;
+        // ###############################################
 
 
         // Used to demonstrate keyboard handling for exercise 2.
@@ -214,9 +351,17 @@ fn main() {
                 // Clear the color and depth buffers
                 gl::ClearColor(0.035, 0.046, 0.078, 1.0); // night sky
                 gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
-
-
-                // == // Issue the necessary gl:: commands to draw your scene here
+                
+                // For drawing traingles
+                simple_shader.activate(); 
+                gl::BindVertexArray(vao);
+                gl::DrawElements(
+                    gl::TRIANGLES,
+                    index_count,
+                    gl::UNSIGNED_INT,
+                    std::ptr::null(),
+                );
+                gl::BindVertexArray(0);
 
 
 
