@@ -369,6 +369,17 @@ fn main() {
 
             // Display the new color buffer on the display
             context.swap_buffers().unwrap(); // we use "double buffering" to avoid artifacts
+
+            
+
+            let elapsed = now.duration_since(first_frame_time).as_secs_f32();
+            let val = elapsed.sin();
+
+            unsafe {
+                let cname = std::ffi::CString::new("u_val").unwrap();
+                let loc = gl::GetUniformLocation(simple_shader.program_id, cname.as_ptr());
+                gl::Uniform1f(loc, val);
+            }
         }
     });
 
