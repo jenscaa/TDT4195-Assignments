@@ -108,6 +108,30 @@ unsafe fn create_vao(vertices: &Vec<f32>, indices: &Vec<u32>, colors: &Vec<f32>)
 }
 // ##############################################################################
 
+// Task 5 c)
+
+// A helper function to make a unit quad centered at origin in the XY plane
+unsafe fn create_billboard_vao(size: f32) -> (u32, i32) {
+    let s = size * 0.5;
+    // 4 verts: pos(x,y,z), colors(r,g,b,a)
+    let vertices: Vec<f32> = vec![
+        -s, -s, 0.0,   s, -s, 0.0,   s,  s, 0.0,  -s,  s, 0.0
+    ];
+    let colors: Vec<f32> = vec![
+        1.0, 1.0, 1.0, 0.9,
+        1.0, 1.0, 1.0, 0.9,
+        1.0, 1.0, 1.0, 0.9,
+        1.0, 1.0, 1.0, 0.9,
+    ];
+    // two triangles: (0,1,2) and (0,2,3)
+    let indices: Vec<u32> = vec![0,1,2, 0,2,3];
+
+    // reuse your create_vao
+    let vao = create_vao(&vertices, &indices, &colors);
+    (vao, indices.len() as i32)
+}
+// ##############################################################################
+
 
 fn main() {
     // Set up the necessary objects to deal with windows and event handling
@@ -174,6 +198,14 @@ fn main() {
                 .attach_file("./shaders/simple.frag")
                 .link()
         };
+
+        let u_transform_loc = unsafe {
+            let name = std::ffi::CString::new("u_transform").unwrap();
+            gl::GetUniformLocation(simple_shader.program_id, name.as_ptr())
+        };
+
+        let (bb_vao, bb_count) = unsafe { create_billboard_vao(0.3) };
+
 
         // ###############################################
 
@@ -263,9 +295,9 @@ fn main() {
 
 
         let indices: Vec<u32> = vec![
-            0, 1, 2,  // Triangle 1
-            3, 4, 5,  // Triangle 2
-            6, 7, 8,  // Triangle 3
+            0, 1, 2,
+            3, 4, 5,
+            6, 7, 8,
         ];
 
             let colors: Vec<f32> = vec![
@@ -291,13 +323,25 @@ fn main() {
 
 
         // Used to demonstrate keyboard handling for exercise 2.
-        let mut _arbitrary_number = 0.0; // feel free to remove
+        let mut _arbitrary_number = 0.0;
+
+        // ##################################################################
+
+        // Task 4 
+        let mut cam_pos   = glm::vec3(0.0, 0.0, 0.0);
+        let mut cam_yaw  : f32 = 0.0;
+        let mut cam_pitch: f32 = 0.0;
+
+        let move_speed: f32 = 2.5;
+        let rot_speed : f32 = 2.5;
+        let pitch_limit: f32 = std::f32::consts::FRAC_PI_2 - 0.01;
 
 
         // The main rendering loop
         let first_frame_time = std::time::Instant::now();
         let mut previous_frame_time = first_frame_time;
         loop {
+
             // Compute time passed since the previous frame and since the start of the program
             let now = std::time::Instant::now();
             let elapsed = now.duration_since(first_frame_time).as_secs_f32();
@@ -317,23 +361,51 @@ fn main() {
 
             // Handle keyboard input
             if let Ok(keys) = pressed_keys.lock() {
+
+                let forward = glm::vec3(cam_yaw.sin(), 0.0, -cam_yaw.cos());
+                let up      = glm::vec3(0.0, 1.0, 0.0);
+                let right   = glm::normalize(&glm::cross(&forward, &up));
+
                 for key in keys.iter() {
                     match key {
-                        // The `VirtualKeyCode` enum is defined here:
-                        //    https://docs.rs/winit/0.25.0/winit/event/enum.VirtualKeyCode.html
-
+                        // Move (WASD + Space / LShift)
+                        VirtualKeyCode::W => {
+                            cam_pos += forward * move_speed * delta_time;
+                        }
+                        VirtualKeyCode::S => {
+                            cam_pos -= forward * move_speed * delta_time;
+                        }
                         VirtualKeyCode::A => {
-                            _arbitrary_number += delta_time;
+                            cam_pos -= right * move_speed * delta_time;
                         }
                         VirtualKeyCode::D => {
-                            _arbitrary_number -= delta_time;
+                            cam_pos += right * move_speed * delta_time;
+                        }
+                        VirtualKeyCode::Space => {
+                            cam_pos += up * move_speed * delta_time;
+                        }
+                        VirtualKeyCode::LShift => {
+                            cam_pos -= up * move_speed * delta_time;
+                        }
+                        // Rotate (arrow keys)
+                        VirtualKeyCode::Left => {
+                            cam_yaw += rot_speed * delta_time;
+                        }
+                        VirtualKeyCode::Right => {
+                            cam_yaw -= rot_speed * delta_time;
+                        }
+                        VirtualKeyCode::Up => {
+                            cam_pitch += rot_speed * delta_time;
+                        }
+                        VirtualKeyCode::Down => {
+                            cam_pitch -= rot_speed * delta_time;
                         }
 
-
-                        // default handler:
-                        _ => { }
+                        _ => {}
                     }
                 }
+
+                cam_pitch = cam_pitch.clamp(-pitch_limit, pitch_limit);
             }
             // Handle mouse movement. delta contains the x and y movement of the mouse since last frame in pixels
             if let Ok(mut delta) = mouse_delta.lock() {
@@ -346,14 +418,31 @@ fn main() {
 
             // == // Please compute camera transforms here (exercise 2 & 3)
 
+            let model: glm::Mat4 = glm::translate(&glm::identity(), &glm::vec3(0.0, 0.0, -2.0));
+
+            let mut view: glm::Mat4 = glm::identity();
+            view = glm::rotate(&view, -cam_yaw,   &glm::vec3(0.0, 1.0, 0.0)); // yaw about Y
+            view = glm::rotate(&view, -cam_pitch, &glm::vec3(1.0, 0.0, 0.0)); // pitch about X
+            view = glm::translate(&view, &(-cam_pos));
+
+            const FOVY_RAD: f32 = std::f32::consts::FRAC_PI_4;
+            let projection: glm::Mat4 = glm::perspective(
+                window_aspect_ratio,
+                FOVY_RAD,
+                1.0,
+                100.0,
+            );
+
+            let transform: glm::Mat4 = projection * view * model;
+            
 
             unsafe {
-                // Clear the color and depth buffers
                 gl::ClearColor(0.035, 0.046, 0.078, 1.0); // night sky
                 gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
-                
-                // For drawing traingles
-                simple_shader.activate(); 
+
+                simple_shader.activate();
+                gl::UniformMatrix4fv(u_transform_loc, 1, gl::FALSE, transform.as_ptr());
+
                 gl::BindVertexArray(vao);
                 gl::DrawElements(
                     gl::TRIANGLES,
@@ -362,24 +451,74 @@ fn main() {
                     std::ptr::null(),
                 );
                 gl::BindVertexArray(0);
+            }
 
+            // ##################################################################
 
+            // Task 5 c)
 
+            // Pick a world position for the billboard
+            let bb_pos = glm::vec3(0.0, (elapsed*1.2).sin()*0.5, -4.0);
+
+            // Extract the 3x3 rotation from view and transpose
+            let r00 = view[(0,0)]; let r01 = view[(0,1)]; let r02 = view[(0,2)];
+            let r10 = view[(1,0)]; let r11 = view[(1,1)]; let r12 = view[(1,2)];
+            let r20 = view[(2,0)]; let r21 = view[(2,1)]; let r22 = view[(2,2)];
+
+            let mut r_cam4 = glm::identity::<f32, 4>();
+            r_cam4[(0,0)] = r00; r_cam4[(0,1)] = r10; r_cam4[(0,2)] = r20;
+            r_cam4[(1,0)] = r01; r_cam4[(1,1)] = r11; r_cam4[(1,2)] = r21;
+            r_cam4[(2,0)] = r02; r_cam4[(2,1)] = r12; r_cam4[(2,2)] = r22;
+
+            // Three billboard instances (positions + per-instance scale)
+            let y1 = (elapsed * 1.3).sin() * 0.2; // mild floaty motion (optional)
+            let y2 = (elapsed * 1.6 + 1.2).sin() * 0.2;
+            let y3 = (elapsed * 1.1 + 2.1).sin() * 0.2;
+
+            let instances = [
+                (glm::vec3( 0.1,  0.1 + y1, -3.6), 0.9_f32),
+                (glm::vec3( 0.0,  0.4 + y2, -4.0), 1.0_f32),
+                (glm::vec3( -0.1, -0.1 + y3, -3.8), 0.8_f32),
+            ];
+
+            // Draw the three billboards
+            unsafe {
+                gl::Disable(gl::CULL_FACE);
+
+                simple_shader.activate();
+                gl::BindVertexArray(bb_vao);
+
+                for (pos, s) in instances {
+                    let model_bb =
+                        glm::translate(&glm::identity(), &pos) *
+                        r_cam4 *
+                        glm::scaling(&glm::vec3(s, s, 1.0));
+
+                    let transform_bb = projection * view * model_bb;
+
+                    gl::UniformMatrix4fv(u_transform_loc, 1, gl::FALSE, transform_bb.as_ptr());
+                    gl::DrawElements(gl::TRIANGLES, bb_count, gl::UNSIGNED_INT, std::ptr::null());
+                }
+
+                gl::BindVertexArray(0);
+                gl::Enable(gl::CULL_FACE);
             }
 
             // Display the new color buffer on the display
             context.swap_buffers().unwrap(); // we use "double buffering" to avoid artifacts
 
-            
+            // ##################################################################
 
-            let elapsed = now.duration_since(first_frame_time).as_secs_f32();
-            let val = elapsed.sin();
+            // Task 3 c)
 
-            unsafe {
-                let cname = std::ffi::CString::new("u_val").unwrap();
-                let loc = gl::GetUniformLocation(simple_shader.program_id, cname.as_ptr());
-                gl::Uniform1f(loc, val);
-            }
+            // let elapsed = now.duration_since(first_frame_time).as_secs_f32();
+            // let val = elapsed.sin();
+
+            // unsafe {
+            //     let cname = std::ffi::CString::new("u_val").unwrap();
+            //     let loc = gl::GetUniformLocation(simple_shader.program_id, cname.as_ptr());
+            //     gl::Uniform1f(loc, val);
+            // }
         }
     });
 
